@@ -15,8 +15,8 @@ class MathQuestionGenerator:
         op = random.choice(self.operations)
 
         # Random numbers for easy math
-        a = random.randint(0, 20)
-        b = random.randint(1, 20) if op == '/' else random.randint(0, 20)
+        a = random.randint(0, 10)
+        b = random.randint(1, 10) if op == '/' else random.randint(0, 10)
 
         # Make division exact to avoid fractions
         if op == '/':
@@ -56,7 +56,6 @@ class MathQuestionGenerator:
         except ValueError:
             print("Please enter a number.")
             return False
-
 
 # Example usage
 if __name__ == "__main__":

@@ -3,14 +3,11 @@ import datetime
 import winsound  
 import threading
 
-#Current stand in math problem, should be replaced by inputs from section C
-mathProblem = "2+2"
-solution = "4"
-
 #Looping beep that increases in length over time
-def Beep():
+
+def Beep(stop_event):
     length = 500
-    while True:
+    while not stop_event.is_set:
         winsound.Beep(1000, length)
         length += 25
         time.sleep((length/1000)+0.2)
@@ -18,16 +15,14 @@ def Beep():
 # Checks current time every 5 seconds and sets off Beep when 
 # equal to alarm time then ends when the correct solution is input
 def alarm_clock(alarm_time, on_alarm_trigger=None, check_solution=None):
-    
-    global beep_active
+    stop_event = threading.Event()
 
     while True:
         # Get current time
         now = datetime.datetime.now().strftime("%H:%M")
         
         if now == alarm_time:
-            beep_active = True
-            beeping_thread = threading.Thread(target=Beep, daemon=True)
+            beeping_thread = threading.Thread(target=Beep, args=(stop_event,), daemon=True)
             beeping_thread.start()
 
             # Updates the GUI
@@ -38,7 +33,8 @@ def alarm_clock(alarm_time, on_alarm_trigger=None, check_solution=None):
             while True:
                 time.sleep(0.5)
                 if check_solution and check_solution():
-                    beep_active = False
+                    stop_event.set()
+                    beeping_thread.join()
                     return # Stops the Alarm
                 
 
@@ -53,13 +49,3 @@ def start_alarm(alarm_time, on_alarm_trigger=None, check_solution=None):
     )
     alarm_thread.start()
     return alarm_thread
-
-# Only run this if the file is executed directly (not imported)
-if __name__ == "__main__":
-    alarm_time = input("Enter alarm time (HH:MM, 24-hour format): ")
-    
-    def simple_check():
-        answer = input("Solution?: ")
-        return answer == solution
-    
-    alarm_clock(alarm_time, check_solution=simple_check)

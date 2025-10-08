@@ -6,6 +6,7 @@
 
 import customtkinter as ctk
 import alarm # Imports the alarm module
+import math_questions as mq # Imports math_questions module (as mq)
 
 # Default dark mode cause only weirdos use light mode
 ctk.set_appearance_mode("dark")
@@ -72,6 +73,9 @@ def show_math_dialog_with_remove(remove_func):
 def show_math_dialog():
     # Displays math problem dialog when alarm goes off
     global math_dialog, correct_solution, current_alarm_remove_func
+    
+    mathProblem, solution = mq.MathQuestionGenerator().generate_question()
+
     correct_solution = False
 
     math_dialog = ctk.CTkToplevel(root)
@@ -80,7 +84,7 @@ def show_math_dialog():
     math_dialog.attributes('-topmost', True)
 
     ctk.CTkLabel(math_dialog, text="Solve to stop alarm!", font=(font_name, 20, "bold")).pack(pady=20)
-    ctk.CTkLabel(math_dialog, text=f"{alarm.mathProblem} = ?", font=(font_name, 24)).pack(pady=10)
+    ctk.CTkLabel(math_dialog, text=f"{mathProblem} = ?", font=(font_name, 24)).pack(pady=10)
 
     answer_entry = ctk.CTkEntry(math_dialog, width=200, font=(font_name, 18))
     answer_entry.pack(pady=10)
@@ -91,19 +95,22 @@ def show_math_dialog():
 
     def check_answer():
         global correct_solution
-        if answer_entry.get() == alarm.solution:
-            correct_solution = True
-            math_dialog.destroy()
-
-            if current_alarm_remove_func:
-                current_alarm_remove_func()
-        else:
-            result_label.configure(text="Wrong! Try again!")
+        user_input = answer_entry.get()
+        try:
+            if int(user_input) == solution:
+                correct_solution = True
+                math_dialog.destroy()
+                if current_alarm_remove_func:
+                    current_alarm_remove_func()
+            else:
+                result_label.configure(text="Wrong! Try again!")
+                answer_entry.delete(0, 'end')
+        except ValueError:
+            result_label.configure(text="Please enter a number!")
             answer_entry.delete(0, 'end')
 
     submit_btn = ctk.CTkButton(math_dialog, text="Submit", command=check_answer)
     submit_btn.pack(pady=10)
-
     answer_entry.bind('<Return>', lambda e: check_answer())
 
 def check_if_solved():
@@ -144,9 +151,9 @@ def set_new_alarm():
     correct_solution = False
     alarm_thread = alarm.start_alarm(
         alarm_time, on_alarm_trigger=lambda: show_math_dialog_with_remove(remove_alarm),
-        check_solution=check_if_solved()
+        check_solution=check_if_solved
     )
-    active_alarms.append(alarm_thread, remove_alarm)
+    active_alarms.append(alarm_thread)
 
     # Hide clock after setting
     hide_clock_buttons()
