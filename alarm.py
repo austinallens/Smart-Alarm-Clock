@@ -7,7 +7,7 @@ import threading
 
 def Beep(stop_event):
     length = 500
-    while not stop_event.is_set:
+    while not stop_event.is_set():
         winsound.Beep(1000, length)
         length += 25
         time.sleep((length/1000)+0.2)

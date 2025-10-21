@@ -1,259 +1,429 @@
 #########################
 # Name: Austin
-# This is the simple version of the GUI using
-# Custom Tkinter. (requires install)
+# This is the improved version of the GUI using
+# PyQt6. (requires install)
 #########################
 
-import customtkinter as ctk
+# CURRENT ISSUES: Wierd Spacing, Button next to alarm doesn't actually work, No need for '-' button instead use it to cancel set, No need for 'check' button remove it
+
+import sys
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+                             QPushButton, QLabel, QFrame, QScrollArea, QDialog,
+                             QLineEdit, QGridLayout, QApplication)
+from PyQt6.QtCore import Qt, QTimer, QTime
+from PyQt6.QtGui import QFont
 import alarm # Imports the alarm module
 import math_questions as mq # Imports math_questions module (as mq)
 
-# Default dark mode cause only weirdos use light mode
-ctk.set_appearance_mode("dark")
-
-root = ctk.CTk()
-root.geometry("1000x800")
-root.title("Smart Alarm")
-
 # --- Values ---
-values = [0, 0, 0, 0]
-up_buttons = []
-down_buttons = []
-active_alarms = []
-alarm_labels = []
-math_dialog = None # Stores reference to math dialog
-correct_solution = False
-current_alarm_remove_func = None
-
-# --- Functions ---
-def increase(index):
-    # Loops at 5 to prevent wonky minutes
-    if index == 2:
-        values[index] = (values[index] + 1) % 6
-    else:
-        values[index] = (values[index] + 1) % 10
-    labels[index].configure(text=str(values[index]))
-    print(values)
-
-def decrease(index):
-    if index == 2:
-        values[index] = (values[index] - 1) % 6
-    else:
-        values[index] = (values[index] - 1) % 10
-    labels[index].configure(text=str(values[index]))
-    print(values)
-
-def show_clock_buttons():
-    # Grid all the up/down buttons and labels
-    for i in range(4):
-        up_buttons[i].grid()
-        labels[i].grid()
-        down_buttons[i].grid()
-    colon.grid()
-    close_button.grid(row=0, column=1, padx=(5,0))
-    # Set button sets alarm on the second click
-    set_button.configure(command=set_new_alarm)
-
-def hide_clock_buttons():
-    for i in range(4):
-        up_buttons[i].grid_remove()
-#        labels[i].grid_remove()
-        down_buttons[i].grid_remove()
-#    colon.grid_remove()
-
-    close_button.grid_remove()
-    set_button.configure(command=show_clock_buttons)
-
-def show_math_dialog_with_remove(remove_func):
-    # Remove function before showing dialog
-    global current_alarm_remove_func
-    current_alarm_remove_func = remove_func
-    show_math_dialog()
-
-def show_math_dialog():
-    # Displays math problem dialog when alarm goes off
-    global math_dialog, correct_solution, current_alarm_remove_func
-    
-    mathProblem, solution = mq.MathQuestionGenerator().generate_question()
-
-    correct_solution = False
-
-    math_dialog = ctk.CTkToplevel(root)
-    math_dialog.title("WAKE UP!")
-    math_dialog.geometry("400x200")
-    math_dialog.attributes('-topmost', True)
-
-    ctk.CTkLabel(math_dialog, text="Solve to stop alarm!", font=(font_name, 20, "bold")).pack(pady=20)
-    ctk.CTkLabel(math_dialog, text=f"{mathProblem} = ?", font=(font_name, 24)).pack(pady=10)
-
-    answer_entry = ctk.CTkEntry(math_dialog, width=200, font=(font_name, 18))
-    answer_entry.pack(pady=10)
-    answer_entry.focus()
-
-    result_label = ctk.CTkLabel(math_dialog, text="", text_color=fg_var)
-    result_label.pack()
-
-    def check_answer():
-        global correct_solution
-        user_input = answer_entry.get()
-        try:
-            if int(user_input) == solution:
-                correct_solution = True
-                math_dialog.destroy()
-                if current_alarm_remove_func:
-                    current_alarm_remove_func()
-            else:
-                result_label.configure(text="Wrong! Try again!")
-                answer_entry.delete(0, 'end')
-        except ValueError:
-            result_label.configure(text="Please enter a number!")
-            answer_entry.delete(0, 'end')
-
-    submit_btn = ctk.CTkButton(math_dialog, text="Submit", command=check_answer)
-    submit_btn.pack(pady=10)
-    answer_entry.bind('<Return>', lambda e: check_answer())
-
-def check_if_solved():
-    # Sends back to alarm.py if problem is inputted correctly
-    return correct_solution
-
-def set_new_alarm():
-    # Creates and starts a new alarm
-    global correct_solution
-
-    alarm_time = f"{values[0]}{values[1]}:{values[2]}{values[3]}"
-
-    for i in range(4):
-        values[i] = 0
-        labels[i].configure(text="0")
-
-    # Creates the alarm numbers
-    alarm_frame = ctk.CTkFrame(alarm_list_frame, fg_color=fg_var)
-    alarm_frame.grid(row=len(alarm_labels) + 1, column=0, pady=5, sticky="ew", padx=10)
-
-    alarm_text = ctk.CTkLabel(alarm_frame, text=f"{alarm_time}", font=(font_name, 18))
-    alarm_text.pack(side="left", padx=10, pady=5)
-
-    def remove_alarm():
-        if alarm_frame in alarm_labels:
-            alarm_labels.remove(alarm_frame)
-        alarm_frame.destroy()
-        reposition_alarms()
-
-    delete_btn = ctk.CTkButton(alarm_frame, text="🗙", width=30, height=30,
-                               fg_color=dark_fg_var, hover_color=dark_hover_var,
-                               command=remove_alarm)
-    delete_btn.pack(side="right", padx=5, pady=5)
-
-    alarm_labels.append(alarm_frame)
-
-    # Starts alarm using imported alarm module
-    correct_solution = False
-    alarm_thread = alarm.start_alarm(
-        alarm_time, on_alarm_trigger=lambda: show_math_dialog_with_remove(remove_alarm),
-        check_solution=check_if_solved
-    )
-    active_alarms.append(alarm_thread)
-
-    # Hide clock after setting
-    hide_clock_buttons()
-
-def reposition_alarms():
-    # Moves alarm labels after deletion
-    for idx, label in enumerate(alarm_labels):
-        label.grid(row=idx + 1, column=0, pady=5, sticky="ew", padx=10)
-
-def remove_last_alarm():
-    # Removes most recently created alarm from the list
-    if alarm_labels:
-        last_alarm = alarm_labels.pop()
-        last_alarm.destroy()
-        reposition_alarms()
-
 # Font Constants for ease-of-change
-font_size = 60
-font_name = "Helvetica"
+font_name = "Arial"
 
 # Color Constants for ease-of-change
 fg_var="#4F925F"
 hover_var="#6BC582"
 dark_fg_var="#924F4F"
 dark_hover_var="#BD6565"
+bg = "#212121"
 
-# --- Frame Setup ---
-container = ctk.CTkFrame(root, fg_color="transparent")
-container.pack(expand=True, fill="both", padx=40, pady=40)
-
-# Left Side - Alarm list
-alarm_list_frame = ctk.CTkFrame(container, fg_color="transparent")
-alarm_list_frame.pack(side="left", fill="both", expand=True, padx=(0, 20))
-
-ctk.CTkLabel(alarm_list_frame, text="Active Alarms", 
-             font=(font_name, 24, "bold")).grid(row=0, column=0, pady=(0,20), sticky="w", padx=10)
-
-# Right Side - Clock Setter
-right_container = ctk.CTkFrame(container, fg_color="transparent")
-right_container.pack(side="right", fill="both", expand=True)
-
-main_frame = ctk.CTkFrame(container, fg_color="transparent")
-main_frame.pack(expand=True)
-
-alarm_button_frame = ctk.CTkFrame(root, fg_color="transparent")
-alarm_button_frame.pack(pady=20)
-
-for i in [0, 1, 3, 4]:
-    main_frame.grid_columnconfigure(i, weight=1, uniform="col")
-main_frame.grid_columnconfigure(2, weight=0) # For colon
-
-
-# --- Buttons ---
-labels = []
-
-set_button = ctk.CTkButton(alarm_button_frame, text="+", width=120, height=50, 
-                           fg_color=fg_var, hover_color=hover_var,
-                           command=show_clock_buttons)
-set_button.grid(row=0, column=0, sticky="w")
-
-remove_button = ctk.CTkButton(alarm_button_frame, text="-", width=120, height=50, 
-                              fg_color=dark_fg_var, hover_color=dark_hover_var,
-                              command=remove_last_alarm)
-remove_button.grid(row=1, column=0, pady=(5,0), sticky="w")
-
-
-close_button = ctk.CTkButton(alarm_button_frame, text="🗙", width=60, height=40, 
-                             fg_color=dark_fg_var, hover_color=dark_hover_var,
-                             command=hide_clock_buttons)
-
-for i in range(4):
+# --- Classes ---
+class DigitalClock(QWidget):
+    """
+    Creates and sets up the digital clock
+    """
+    def __init__(self):
+        super().__init__()
+        self.time_label = QLabel(self)
+        self.timer = QTimer(self)
+        self.is_setting_alarm = False
+        self.alarm_time = [1, 2, 0, 0] # Default alarm time: 12:00
+        self.alarm_period = "AM"
+        self.initUI()
     
-    col = i if i < 2 else i + 1 # Skips column 2 for the colon
+    def initUI(self):
 
-    # Up Buttons
-    up_btn = ctk.CTkButton(main_frame, text="⮝", width=60, height=40, fg_color=fg_var, hover_color=hover_var, command=lambda i=i: increase(i))
-    up_btn.grid(row=0, column=col, padx=5, pady=(10, 5), )
-    up_buttons.append(up_btn)
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-    # Num. Labels
-    lbl = ctk.CTkLabel(main_frame, text=str(values[i]), font=(font_name, font_size, "bold"))
-    lbl.grid(row=1, column=col, padx=2, pady=5)
-    labels.append(lbl)
+        font = QFont(font_name, 150)
+        self.time_label.setFont(font)
 
-    # Down Buttons
-    down_btn = ctk.CTkButton(main_frame, text="⮟", width=60, height=40, fg_color=fg_var, hover_color=hover_var, command=lambda i=i: decrease(i))
-    down_btn.grid(row=2, column=col, padx=5, pady=(5, 10))
-    down_buttons.append(down_btn)
+        self.setStyleSheet("background-color: #212121")
 
-# Colon label between hours and minutes
-colon = ctk.CTkLabel(main_frame, text=":", font=(font_name, font_size, "bold"))
-colon.grid(row=1, column=2, padx=0)
+        self.timer.timeout.connect(self.update_time)
+        self.timer.start(1000)
 
-for i in range(4):
-    up_buttons[i].grid_remove()
-#    labels[i].grid_remove()
-    down_buttons[i].grid_remove()
-#colon.grid_remove()
+        self.update_time()
 
-#set_button.configure(command=show_clock_buttons)
-#close_button.configure(command=hide_clock_buttons)
+    def update_time(self):
+        if self.is_setting_alarm:
+            # Show alarm time being set
+            alarm_display = f"{self.alarm_time[0]}{self.alarm_time[1]}:{self.alarm_time[2]}{self.alarm_time[3]}"
+            self.time_label.setText(alarm_display)
+        else:
+            # Show current time    
+            current_time = QTime.currentTime().toString("hh:mm AP")
+            self.time_label.setText(current_time)
+    
+    def enter_alarm_mode(self):
+        """Switch to alarm setting mode"""
+        self.is_setting_alarm = True
+        # Initilize with current time
+        current = QTime.currentTime()
+        hour = current.hour()
+        minute = current.minute()
 
-root.mainloop()
+        # Convert to 12-hour format
+        if hour == 0:
+            hour = 12
+            self.alarm_period = "AM"
+        elif hour < 12:
+            self.alarm_period = "AM"
+        elif hour == 12:
+            self.alarm_period = "PM"
+        else:
+            hour -= 12
+            self.alarm_period = "PM"
+        
+        self.alarm_time = [hour // 10, hour % 10, minute // 10, minute % 10]
+        self.update_time()
+    
+    def exit_alarm_mode(self):
+        """Exits alarm setting mode"""
+        self.is_setting_alarm = False
+        self.update_time()
+    
+    def increment_digit(self, index):
+        """Increment a specific digit of the alarm time"""
+        if index == 0: # First hour digit (0-1)
+            self.alarm_time[0] = (self.alarm_time[0] + 1) % 2
+            if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
+                self.alarm_time[1] = 1  # Can't have 00
+        elif index == 1:  # Second hour digit
+            max_val = 2 if self.alarm_time[0] == 1 else 9
+            self.alarm_time[1] = (self.alarm_time[1] + 1)
+            if self.alarm_time[1] > max_val:
+                self.alarm_time[1] = 0 if self.alarm_time[0] == 1 else 1
+            if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
+                self.alarm_time[1] = 1  # Can't have 00
+        elif index == 2:  # First minute digit (0-5)
+            self.alarm_time[2] = (self.alarm_time[2] + 1) % 6
+        elif index == 3:  # Second minute digit (0-9)
+            self.alarm_time[3] = (self.alarm_time[3] + 1) % 10
+        self.update_time()
+
+    def decrement_digit(self, index):
+        """Decrement a specific digit of the alarm time"""
+        if index == 0:  # First hour digit (0-1)
+            self.alarm_time[0] = (self.alarm_time[0] - 1) % 2
+            if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
+                self.alarm_time[1] = 1  # Can't have 00
+        elif index == 1:  # Second hour digit
+            max_val = 2 if self.alarm_time[0] == 1 else 9
+            self.alarm_time[1] = (self.alarm_time[1] - 1)
+            if self.alarm_time[1] < 0:
+                self.alarm_time[1] = max_val
+            if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
+                self.alarm_time[1] = 9  # Wrap to 09
+        elif index == 2:  # First minute digit (0-5)
+            self.alarm_time[2] = (self.alarm_time[2] - 1) % 6
+        elif index == 3:  # Second minute digit (0-9)
+            self.alarm_time[3] = (self.alarm_time[3] - 1) % 10
+        self.update_time()
+
+    def get_alarm_time_string(self):
+        """Get the alarm time in HH:MM format (24-hour)"""
+        hour = self.alarm_time[0] * 10 + self.alarm_time[1]
+        minute = self.alarm_time[2] * 10 + self.alarm_time[3]
+        
+        # Convert to 24-hour format
+        if self.alarm_period == "PM" and hour != 12:
+            hour += 12
+        elif self.alarm_period == "AM" and hour == 12:
+            hour = 0
+        
+        return f"{hour:02d}:{minute:02d}"
+
+class UpDownButtons(QWidget):
+    """
+    Creates and sets up the Up and Down buttons for the GUI.
+    The Up buttons cause the alarm digits to change by one (within normal 12-hour clock ranges).
+    The Down buttons cause the alarm digits to change by one (within normal 12-hour clock ranges).
+    """
+    def __init__(self, layout_to_add_to, digital_clock):
+        super().__init__()
+        self.layout = layout_to_add_to
+        self.digital_clock = digital_clock
+        self.upBtns = []
+        self.downBtns = []
+        self.create_up_buttons()
+    
+    def create_up_buttons(self):
+        """
+        Creates a horizontal layout for the Up buttons above the digits
+        """
+        up_layout = QHBoxLayout()
+        up_layout.setSpacing(10)
+        up_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Create 4 up buttons
+        for i in range(4):
+            upBtn = QPushButton(text="⮝", parent=self)
+            upBtn.setFixedSize(100,30)
+            upBtn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: transparent;
+                    border: none;
+                    font-size: 30px;
+                }}
+            """)
+            # Connect to increment function
+            upBtn.clicked.connect(lambda checked, idx=i: self.digital_clock.increment_digit(idx))
+            self.upBtns.append(upBtn)
+            up_layout.addWidget(upBtn)
+
+        self.layout.addLayout(up_layout)
+    
+    def add_down_buttons(self):
+        """
+        Creates a horizontal layout for the Down buttons below the digits
+        """
+        down_layout = QHBoxLayout()
+        down_layout.setSpacing(10)
+        down_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # Creates 4 down buttons
+        for i in range(4):
+            downBtn = QPushButton(text="⮟", parent=self)
+            downBtn.setFixedSize(100,30)
+            downBtn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: transparent;
+                    border: none;
+                    font-size: 30px;
+                }}
+            """)
+            downBtn.clicked.connect(lambda checked, idx=i: self.digital_clock.decrement_digit(idx))
+            self.downBtns.append(downBtn)
+            down_layout.addWidget(downBtn)
+        
+        self.layout.addLayout(down_layout)
+
+    def show_buttons(self):
+        """
+        Shows hidden Up and Down buttons (for when Set is pressed)
+        """
+        for btn in self.upBtns:
+            btn.setEnabled(True)  # Enable clicking
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {fg_var};
+                    color: #212121;
+                    font-size: 30px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover_var};
+                }}
+            """)        
+        for btn in self.downBtns:
+            btn.setEnabled(True)  # Enable clicking
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {fg_var};
+                    color: #212121;
+                    font-size: 30px;
+                }}
+                QPushButton:hover {{
+                    background-color: {hover_var};
+                }}
+            """)
+    
+    def hide_buttons(self):
+        """
+        Hides shown Up and Down buttons (for when Set is unpressed)
+        """
+        for btn in self.upBtns:
+            btn.setEnabled(False)  # Enable clicking
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: transparent;
+                    border: none;
+                    font-size: 30px;
+                }}
+            """)
+        for btn in self.downBtns:
+            btn.setEnabled(False)  # Disable clicking
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    color: transparent;
+                    border: none;
+                    font-size: 30px;
+                }}
+            """)
+
+
+class SetCancelButtons(QWidget):
+    """
+    Creates and sets up the Set and Cancel buttons for the GUI.
+    Set is used to set and alarm.
+    Cancel is used to cancel setting the alarm.
+    """
+    def __init__(self, layout_to_add_to, up_down_buttons, digital_clock):
+        super().__init__()
+        self.layout = layout_to_add_to
+        self.up_down_buttons = up_down_buttons
+        self.digital_clock = digital_clock
+        self.buttons_hidden = True # Initially sets that buttons are hidden
+        self.alarms = []
+        self.create_buttons()
+
+    def create_buttons(self):
+        """
+        Creates and sets up the Set and Cancel buttons.
+        """
+        # Creates a horizontal layout for the buttons
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(0)
+
+        self.setBtn = QPushButton(text="+", parent=self)
+        self.setBtn.setFixedSize(100,60)
+        self.setBtn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var}; 
+                color: #212121; 
+                font-size: 24px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var};
+            }}
+        """)
+
+        self.cancelBtn = QPushButton(text="-", parent=self)
+        self.cancelBtn.setFixedSize(100,60)
+        self.cancelBtn.setEnabled(False)  # Disable initially
+        self.cancelBtn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent; 
+                color: transparent; 
+                border: none;
+                font-size: 24px;
+            }}
+        """)
+
+        # Adds buttons to layout
+        button_layout.addWidget(self.setBtn)
+        button_layout.addWidget(self.cancelBtn)
+
+        # Position set/cancel buttons
+        button_container = QHBoxLayout()
+        button_container.addLayout(button_layout)
+        button_container.addStretch(3)
+
+        self.layout.addLayout(button_container)
+
+        # Connect setBtn's clicked signal to methods
+        self.setBtn.clicked.connect(self.toggleBtns)
+        self.cancelBtn.clicked.connect(self.cancelAlarm)
+
+    def toggleBtns(self):
+        if self.buttons_hidden:
+            # Entering alarm set mode
+            self.cancelBtn.setEnabled(True)  # Enable clicking
+            self.cancelBtn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {dark_fg_var}; 
+                    color: #212121; 
+                    font-size: 24px;
+                }}
+                QPushButton:hover {{
+                    background-color: {dark_hover_var};
+                }}
+            """)
+            self.up_down_buttons.show_buttons()
+            self.digital_clock.enter_alarm_mode()
+            self.buttons_hidden = False
+        else:
+            # Confirming alarm
+            alarm_time = self.digital_clock.get_alarm_time_string()
+            self.alarms.append(alarm_time)
+            print(f"Alarm set for: {alarm_time}") # Debug print
+
+            #start the alarm
+            alarm.start_alarm(alarm_time)
+
+            # Exit alarm mode
+            self.cancelBtn.setEnabled(False)  # Disable clicking
+            self.cancelBtn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent; 
+                    color: transparent; 
+                    border: none;
+                    font-size: 24px;
+                }}
+            """)
+            self.up_down_buttons.hide_buttons()
+            self.buttons_hidden = True
+
+    def cancelAlarm(self):
+        """Cancel setting the alarm"""
+        self.cancelBtn.setEnabled(False)  # Disable clicking
+        self.cancelBtn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent; 
+                color: transparent; 
+                border: none;
+                font-size: 24px;
+            }}
+        """)
+        self.up_down_buttons.hide_buttons()
+        self.digital_clock.exit_alarm_mode()
+        self.buttons_hidden = True
+
+class MainWindow(QWidget):
+    """
+    Initilizes the Main Window and calls all the individual widgets to be ran
+    """
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Smart Alarm Clock")
+        self.setGeometry(600, 400, 800, 600)
+
+        # Main horizontal layout for alarm panel and clock
+        main_horizontal = QHBoxLayout()
+        self.setLayout(main_horizontal)
+
+        # Create alarm panel on the left
+        self.alarm_panel = QFrame()
+        self.alarm_panel.setFixedWidth(300)
+        self.alarm_panel.setStyleSheet(f"background-color: #1a1a1a;")
+        main_horizontal.addWidget(self.alarm_panel)
+
+        # Create clock section to the right
+        clock_widget = QWidget()
+        self.main_layout = QVBoxLayout()
+        clock_widget.setLayout(self.main_layout)
+        clock_widget.setStyleSheet(f"background-color: {bg};")
+        main_horizontal.addWidget(clock_widget)
+
+        # Add spacing at the top
+        self.main_layout.addSpacing(50)
+
+        # Creates each piece of the GUI
+        self.DigitalClock = DigitalClock()
+        self.UpDownButtons = UpDownButtons(self.main_layout, self.DigitalClock)
+        self.main_layout.addWidget(self.DigitalClock.time_label)
+        self.UpDownButtons.add_down_buttons()
+
+        self.main_layout.addSpacing(20)
+
+        self.SetCancelButtons = SetCancelButtons(self.main_layout, self.UpDownButtons, self.DigitalClock)
+
+# Runs only if the main file is run
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
