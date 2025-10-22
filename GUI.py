@@ -1,16 +1,14 @@
-#########################
-# Name: Austin
-# This is the improved version of the GUI using
-# PyQt6. (requires install)
-#########################
-
-# CURRENT ISSUES: Wierd Spacing, Button next to alarm doesn't actually work, No need for '-' button instead use it to cancel set, No need for 'check' button remove it
+"""
+Name: Austin
+This is the improved version of the GUI using
+PyQt6. (requires install)
+"""
 
 import sys
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QFrame, QScrollArea, QDialog,
                              QLineEdit, QGridLayout, QApplication)
-from PyQt6.QtCore import Qt, QTimer, QTime
+from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 import alarm # Imports the alarm module
 import math_questions as mq # Imports math_questions module (as mq)
@@ -27,6 +25,306 @@ dark_hover_var="#BD6565"
 bg = "#212121"
 
 # --- Classes ---
+class AlarmSignals(QObject):
+    """Signal handler for thread-safe alarm triggering"""
+    alarm_triggered = pyqtSignal(object, object)  # question_gen, callback
+
+class AlarmPanel(QWidget):
+    """
+    Displays the list of set alarms in the left panel
+    """
+    def __init__(self):
+        super().__init__()
+        self.alarm_threads = {}
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Title Label
+        title = QLabel("Alarms")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setFont(QFont(font_name, 18, QFont.Weight.Bold))
+        title.setStyleSheet("color: white; padding: 10px;")
+        layout.addWidget(title)
+
+        # Scroll area for alarms
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none;")
+
+        # Container for alarm widgets
+        self.alarm_container = QWidget()
+        self.alarm_layout = QVBoxLayout()
+        self.alarm_layout.setSpacing(10)
+        self.alarm_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.alarm_container.setLayout(self.alarm_layout)
+
+        scroll.setWidget(self.alarm_container)
+        layout.addWidget(scroll)
+
+    def add_alarm(self, alarm_time_24hr, alarm_time_display, alarm_thread):
+        """
+        Add a new alarm to the panel.
+        alarm_time_24hr: HH:MM in 24-hour format (for backend).
+        alarm_time_display: Formatted display string (e.g., "12:30 PM")
+        """
+        self.alarm_threads[alarm_time_24hr] = alarm_thread
+        alarm_widget = QFrame()
+        alarm_widget.alarm_time = alarm_time_24hr  # Add this line to identify widget
+        alarm_widget.setStyleSheet(f"""
+            QFrame {{
+                background-color: #2a2a2a;
+                border-radius: 5px;
+                padding: 10px;      
+            }}
+        """)
+
+        alarm_layout = QHBoxLayout()
+        alarm_widget.setLayout(alarm_layout)
+
+        # Time label
+        time_label = QLabel(alarm_time_display)
+        time_label.setFont(QFont(font_name, 16))
+        time_label.setStyleSheet("color: white;")
+        alarm_layout.addWidget(time_label)
+
+        alarm_layout.addStretch()
+
+        # Delete button
+        delete_btn = QPushButton("✕")
+        delete_btn.setFixedSize(30, 30)
+        delete_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {dark_fg_var};
+                color: white;
+                border-radius: 10px;
+                font-size: 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {dark_hover_var}
+            }}
+        """)
+        delete_btn.clicked.connect(lambda: self.remove_alarm(alarm_widget, alarm_time_24hr))
+        alarm_layout.addWidget(delete_btn)
+
+        self.alarm_layout.addWidget(alarm_widget)
+    
+    def remove_alarm(self, alarm_widget, alarm_time):
+        """Remove an alarm from the panel and stop the alarm thread"""
+        self.alarm_layout.removeWidget(alarm_widget)
+        alarm_widget.deleteLater()
+
+        if alarm_time in self.alarm_threads:
+            thread_info = self.alarm_threads[alarm_time]
+            if 'stop_event' in thread_info:
+                thread_info['stop_event'].set()
+            del self.alarm_threads[alarm_time]
+
+        print(f"Removed alarm: {alarm_time}") # Debug print
+
+    def remove_alarm_by_time(self, alarm_time):
+        """Remove an alarm by its time string (called after alarm completes)"""
+        if alarm_time in self.alarm_threads:
+            thread_info = self.alarm_threads[alarm_time]
+            
+            # Find and remove the widget
+            for i in range(self.alarm_layout.count()):
+                widget = self.alarm_layout.itemAt(i).widget()
+                if widget:
+                    # Check if this is the alarm widget for this time
+                    # Store alarm_time in widget to identify it
+                    if hasattr(widget, 'alarm_time') and widget.alarm_time == alarm_time:
+                        self.alarm_layout.removeWidget(widget)
+                        widget.deleteLater()
+                        break
+            
+            # Stop the alarm by setting the stop event
+            if 'stop_event' in thread_info:
+                thread_info['stop_event'].set()
+            
+            del self.alarm_threads[alarm_time]
+            print(f"Alarm completed and removed: {alarm_time}")
+
+class SettingsPanel(QWidget):
+    """
+    Settings panel that overlays the main window
+    """
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.initUI()
+        self.hide() # Initially hidden
+
+    def initUI(self):
+        from PyQt6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {bg}
+                border-radius: 15px;
+            }}
+    """)
+        
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Header with title and close button
+        header = QHBoxLayout()
+
+        title = QLabel("Settings")
+        title.setFont(QFont(font_name, 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        header.addWidget(title)
+
+        header.addStretch
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(40, 40)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {dark_fg_var};
+                color: white;
+                border-radius: 20px;
+                font-size: 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {dark_hover_var};
+            }}
+        """)
+        close_btn.clicked.connect(self.hide)
+        header.addWidget(close_btn)
+
+        layout.addLayout(header)
+        layout.addSpacing(20)
+
+        # Add settings options here
+        # Example:
+        setting_label = QLabel("Settings options will go here...")
+        setting_label.setStyleSheet("color: #888888; font-size: 16px;")
+        layout.addWidget(setting_label)
+
+        layout.addStretch()
+
+class QuestionDialog(QDialog):
+    """
+    Dialog that displays a question and requires correct answer to dismiss
+    """
+    def __init__(self, parent=None, question_generator=None):
+        super().__init__(parent)
+        self.question_generator = question_generator or mq.MathQuestionGenerator()
+        self.correct_answer = None
+        self.initUI()
+        self.generate_new_question()
+
+    def initUI(self):
+        self.setWindowTitle("Alarm - Solve to Dismiss")
+        self.setModal(True)
+        self.setFixedSize(400, 250)
+        self.setStyleSheet(f"background-color: {bg};")
+
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+
+        # Title
+        title = QLabel("Solve this to turn off the Alarm!")
+        title.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        title.setStyleSheet("color: white;")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(title)
+
+        layout.addSpacing(20)
+
+        # Question Display
+        self.question_label = QLabel()
+        self.question_label.setFont(QFont(font_name, 32))
+        self.question_label.setStyleSheet("color: white;")
+        self.question_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.question_label)
+
+        layout.addSpacing(20)
+
+        # Answer input
+        self.answer_input = QLineEdit()
+        self.answer_input.setFont(QFont(font_name, 24))
+        self.answer_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.answer_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 10px
+            }}
+        """)
+        self.answer_input.returnPressed.connect(self.check_answer)
+        layout.addWidget(self.answer_input)
+
+        layout.addSpacing(10)
+
+        # Feedback label
+        self.feedback_label = QLabel()
+        self.feedback_label.setFont(QFont(font_name, 14))
+        self.feedback_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.feedback_label)
+
+        layout.addSpacing(10)
+
+        # Submit button
+        submit_btn = QPushButton("Submit")
+        submit_btn.setFixedHeight(50)
+        submit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var};
+                color: #212121;
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: 5px
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var}
+            }}
+        """)
+        submit_btn.clicked.connect(self.check_answer)
+        layout.addWidget(submit_btn)
+
+    def generate_new_question(self):
+        """Generate a new question using the question generator"""
+        question, answer = self.question_generator.generate_question()
+        self.question_label.setText(question)
+        self.correct_answer = answer
+        self.answer_input.clear()
+        self.feedback_label.clear()
+    
+    def check_answer(self):
+        """Check if the user's answer is correct"""
+        user_answer = int(self.answer_input.text())
+        
+        # Try to convert to int if the correct answer is an int
+        if isinstance(self.correct_answer, int):
+            try:
+                user_answer = int(user_answer)
+            except ValueError:
+                self.feedback_label.setStyleSheet("color: #BD6565;")
+                self.feedback_label.setText("Please enter a number.")
+                return
+
+        if user_answer == self.correct_answer:
+            self.feedback_label.setStyleSheet("color: #6BC582;")
+            self.feedback_label.setText("✓ Correct! Alarm dismissed.")
+            QTimer.singleShot(500, self.accept)  # Close after 0.5s
+        else:
+            self.feedback_label.setStyleSheet("color: #BD6565;")
+            self.feedback_label.setText(f"✗ Wrong! Try again.")
+
+
+    def closeEvent(self, event):
+        """Prevent closing without correct answer"""
+        event.ignore()
+
 class DigitalClock(QWidget):
     """
     Creates and sets up the digital clock
@@ -98,6 +396,8 @@ class DigitalClock(QWidget):
             self.alarm_time[0] = (self.alarm_time[0] + 1) % 2
             if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
                 self.alarm_time[1] = 1  # Can't have 00
+            if self.alarm_time[0] == 1 and self.alarm_time[1] > 2:
+                self.alarm_time[1] = 0
         elif index == 1:  # Second hour digit
             max_val = 2 if self.alarm_time[0] == 1 else 9
             self.alarm_time[1] = (self.alarm_time[1] + 1)
@@ -117,6 +417,8 @@ class DigitalClock(QWidget):
             self.alarm_time[0] = (self.alarm_time[0] - 1) % 2
             if self.alarm_time[0] == 0 and self.alarm_time[1] == 0:
                 self.alarm_time[1] = 1  # Can't have 00
+            if self.alarm_time[0] == 1 and self.alarm_time[1] > 2:
+                self.alarm_time [1] = 2
         elif index == 1:  # Second hour digit
             max_val = 2 if self.alarm_time[0] == 1 else 9
             self.alarm_time[1] = (self.alarm_time[1] - 1)
@@ -142,6 +444,12 @@ class DigitalClock(QWidget):
             hour = 0
         
         return f"{hour:02d}:{minute:02d}"
+    
+    def get_alarm_display_string(self):
+        """Get the alarm time in 12-hour format for display"""
+        hour = self.alarm_time[0] * 10 + self.alarm_time[1]
+        minute = self.alarm_time[2] * 10 + self.alarm_time[3]
+        return f"{hour:02d}:{minute:02d} {self.alarm_period}"
 
 class UpDownButtons(QWidget):
     """
@@ -271,14 +579,18 @@ class SetCancelButtons(QWidget):
     Set is used to set and alarm.
     Cancel is used to cancel setting the alarm.
     """
-    def __init__(self, layout_to_add_to, up_down_buttons, digital_clock):
+    def __init__(self, layout_to_add_to, up_down_buttons, digital_clock, alarm_panel):
         super().__init__()
         self.layout = layout_to_add_to
         self.up_down_buttons = up_down_buttons
         self.digital_clock = digital_clock
+        self.alarm_panel = alarm_panel
         self.buttons_hidden = True # Initially sets that buttons are hidden
         self.alarms = []
         self.create_buttons()
+        # Signal handler for alarms
+        self.alarm_signals = AlarmSignals()
+        self.alarm_signals.alarm_triggered.connect(self.show_question_dialog)
 
     def create_buttons(self):
         """
@@ -347,12 +659,43 @@ class SetCancelButtons(QWidget):
             self.buttons_hidden = False
         else:
             # Confirming alarm
-            alarm_time = self.digital_clock.get_alarm_time_string()
-            self.alarms.append(alarm_time)
-            print(f"Alarm set for: {alarm_time}") # Debug print
+            alarm_time_24hr = self.digital_clock.get_alarm_time_string()
+            alarm_time_display = self.digital_clock.get_alarm_display_string()
+            self.alarms.append(alarm_time_24hr)
+            print(f"Alarm set for: {alarm_time_24hr}") # Debug print
 
-            #start the alarm
-            alarm.start_alarm(alarm_time)
+            # Create question generator (can be customized later)
+            question_gen = mq.MathQuestionGenerator()
+
+            # Store alarm time for removal after completion
+            alarm_time_to_remove = alarm_time_24hr
+
+            # Create a thread-safe callback using signals
+            def on_alarm():
+                """Signal main thread to show question dialog"""
+                import threading
+                result_event = threading.Event()
+                result_container = {'success': False}
+
+                def callback(success):
+                    result_container['success'] = success
+                    result_event.set()
+
+                # Emit signal to main thread
+                self.alarm_signals.alarm_triggered.emit(question_gen, callback)
+
+                # Wait for result
+                result_event.wait()
+
+                # Remove alarm from panel after correct answer
+                if result_container['success']:
+                    self.alarm_panel.remove_alarm_by_time(alarm_time_to_remove)
+
+                return result_container['success']
+
+            # Add alarm to the panel and start it
+            alarm_thread = alarm.start_alarm(alarm_time_24hr, on_alarm_trigger=on_alarm)
+            self.alarm_panel.add_alarm(alarm_time_24hr, alarm_time_display, alarm_thread)
 
             # Exit alarm mode
             self.cancelBtn.setEnabled(False)  # Disable clicking
@@ -365,6 +708,7 @@ class SetCancelButtons(QWidget):
                 }}
             """)
             self.up_down_buttons.hide_buttons()
+            self.digital_clock.exit_alarm_mode()
             self.buttons_hidden = True
 
     def cancelAlarm(self):
@@ -382,6 +726,12 @@ class SetCancelButtons(QWidget):
         self.digital_clock.exit_alarm_mode()
         self.buttons_hidden = True
 
+    def show_question_dialog(self, question_gen, callback):
+        """Show question dialog in main thread"""
+        dialog = QuestionDialog(None, question_gen)
+        result = dialog.exec() == QDialog.DialogCode.Accepted
+        callback(result)
+
 class MainWindow(QWidget):
     """
     Initilizes the Main Window and calls all the individual widgets to be ran
@@ -396,17 +746,46 @@ class MainWindow(QWidget):
         self.setLayout(main_horizontal)
 
         # Create alarm panel on the left
-        self.alarm_panel = QFrame()
-        self.alarm_panel.setFixedWidth(300)
-        self.alarm_panel.setStyleSheet(f"background-color: #1a1a1a;")
-        main_horizontal.addWidget(self.alarm_panel)
+        self.alarm_panel = AlarmPanel()
+        alarm_panel_frame = QFrame()
+        alarm_panel_frame.setFixedWidth(300)
+        alarm_panel_frame.setStyleSheet(f"background-color: #1a1a1a; border-radius: 15px;")
+        alarm_panel_layout = QVBoxLayout()
+        alarm_panel_frame.setLayout(alarm_panel_layout)
+        alarm_panel_layout.addWidget(self.alarm_panel)
+        main_horizontal.addWidget(alarm_panel_frame)
 
         # Create clock section to the right
         clock_widget = QWidget()
         self.main_layout = QVBoxLayout()
         clock_widget.setLayout(self.main_layout)
-        clock_widget.setStyleSheet(f"background-color: {bg};")
+        clock_widget.setStyleSheet(f"background-color: {bg}; border-radius: 15px;")
         main_horizontal.addWidget(clock_widget)
+
+        # Create settings panel (initially hidden, overlays clock widget)
+        self.settings_panel = SettingsPanel(clock_widget)
+
+        # Add settings button in top right
+        settings_layout = QHBoxLayout()
+        settings_layout.addStretch()
+        
+        settings_btn = QPushButton("⋮")
+        settings_btn.setFixedSize(50, 50)
+        settings_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: transparent;
+                color: #888888;
+                font-size: 30px;
+                border: none;
+            }}
+            QPushButton:hover {{
+                color: {fg_var};
+            }}
+        """)
+        settings_layout.addWidget(settings_btn)
+        settings_btn.clicked.connect(self.open_settings)
+
+        self.main_layout.addLayout(settings_layout)
 
         # Add spacing at the top
         self.main_layout.addSpacing(50)
@@ -419,7 +798,23 @@ class MainWindow(QWidget):
 
         self.main_layout.addSpacing(20)
 
-        self.SetCancelButtons = SetCancelButtons(self.main_layout, self.UpDownButtons, self.DigitalClock)
+        self.SetCancelButtons = SetCancelButtons(self.main_layout, self.UpDownButtons, 
+                                                 self.DigitalClock, self.alarm_panel)
+    
+    def open_settings(self):
+        """Show the settings panel"""
+        # Get the parent (clock_widget) size
+        parent = self.settings_panel.parent()
+        self.settings_panel.setGeometry(0, 0, parent.width(), parent.height())
+        self.settings_panel.show()
+        self.settings_panel.raise_()  # Bring to front
+
+    def resizeEvent(self, event):
+        """Handle window resize to update settings panel size"""
+        super().resizeEvent(event)
+        if hasattr(self, 'settings_panel') and self.settings_panel.isVisible():
+            parent = self.settings_panel.parent()
+            self.settings_panel.setGeometry(0, 0, parent.width(), parent.height())
 
 # Runs only if the main file is run
 if __name__ == "__main__":
