@@ -5,9 +5,9 @@ PyQt6. (requires install)
 """
 
 import sys
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
+from PyQt6.QtWidgets import (QComboBox, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QFrame, QScrollArea, QDialog,
-                             QLineEdit, QGridLayout, QApplication)
+                             QLineEdit, QMenu, QApplication)
 from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 import alarm # Imports the alarm module
@@ -163,7 +163,7 @@ class SettingsPanel(QWidget):
 
         self.setStyleSheet(f"""
             QWidget {{
-                background-color: {bg}
+                background-color: {bg};
                 border-radius: 15px;
             }}
     """)
@@ -179,7 +179,7 @@ class SettingsPanel(QWidget):
         title.setStyleSheet("color: white;")
         header.addWidget(title)
 
-        header.addStretch
+        header.addStretch()
 
         close_btn = QPushButton("✕")
         close_btn.setFixedSize(40, 40)
@@ -202,12 +202,259 @@ class SettingsPanel(QWidget):
         layout.addSpacing(20)
 
         # Add settings options here
-        # Example:
-        setting_label = QLabel("Settings options will go here...")
-        setting_label.setStyleSheet("color: #888888; font-size: 16px;")
-        layout.addWidget(setting_label)
+        # Scroll area for settings
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("border: none;")
 
-        layout.addStretch()
+        settings_container = QWidget()
+        settings_layout = QVBoxLayout()
+        settings_layout.setSpacing(20)
+        settings_container.setLayout(settings_layout)
+
+        # Add more color pickers here as needed
+        # Example for future:
+        # self.button_color_picker = ColorPicker(
+        #   "Button Color",
+        #   default_color="#FFFFFF",
+        #   on_color_change=self.apply_BUTTON_color
+        #)
+        # settings_layout.addWidget(self.button_color_picker)
+
+        # Clock Color Setting
+        self.clock_color_picker = ColorPicker(
+            "Clock Color",
+            default_color="#FFFFFF",
+            on_color_change=self.apply_clock_color
+        )
+        settings_layout.addWidget(self.clock_color_picker)
+
+        # Cancel Button Color Setting
+        self.cancel_color_picker = ColorPicker(
+            "Cancel Color",
+            default_color="#924F4F",
+            on_color_change=self.apply_cancel_color
+        )
+        self.cancel_color_picker.color_combo.setCurrentText("Red")  # Set to Red by default
+        settings_layout.addWidget(self.cancel_color_picker)
+
+        settings_layout.addStretch()
+        scroll.setWidget(settings_container)
+        layout.addWidget(scroll)
+
+    def lighten_color(self, hex_color, factor=1.2):
+        """Lighten a hex color by a factor"""
+        # Remove the '#' if present
+        hex_color = hex_color.lstrip('#')
+
+        # Convert to RGB
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+
+        # Lighten
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+
+        # Convert back to hex
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def apply_clock_color(self, color):
+        """Apply color to the clock display"""
+        main_window = self.parent().parent()
+        if hasattr(main_window, 'DigitalClock'):
+            main_window.DigitalClock.time_label.setStyleSheet(f"color: {color};")
+
+    def apply_cancel_color(self, color):
+        """Apply color to the cancel button"""
+        main_window = self.parent().parent()
+        if hasattr(main_window, 'cancel_button_color'):
+            main_window.cancel_button_color = color # Stores the color
+            # Apply immediately if button is visible
+            if hasattr(main_window, 'SetCancelButtons'):
+                if main_window.SetCancelButtons.cancelBtn.isEnabled():
+                    # Calculate lighter hover color
+                    hover_color = self.lighten_color(color, 1.2)
+                    main_window.SetCancelButtons.cancelBtn.setStyleSheet(f"""
+                        QPushButton {{
+                            background-color: {color};
+                            color: #212121;
+                            font-size: 24px;
+                        }}
+                        QPushButton:hover {{
+                            background-color: {hover_color};
+                            filter: brightness(1.2);
+                        }}
+                    """)
+
+class ColorPicker(QWidget):
+    """
+    Reusable color picker widget with preset and custom hex options
+    """
+    def __init__(self, label_text, default_color="#FFFFFF", on_color_change=None):
+        super().__init__()
+        self.on_color_change = on_color_change
+        self.current_color = default_color
+        self.initUI(label_text)
+
+    def initUI(self, label_text):
+        layout = QVBoxLayout()
+        layout.setSpacing(10)
+        self.setLayout(layout)
+
+        # Label
+        label = QLabel(label_text)
+        label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        label.setStyleSheet("color: white;")
+        layout.addWidget(label)
+
+        # Color dropdown
+        self.color_combo = QComboBox()
+        self.color_combo.addItems(["White", "Green", "Red", "Blue", "Yellow", "Cyan", "Magenta", "Custom"])
+        self.color_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 14px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white;
+                margin-right: 10px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #2a2a2a;
+                color: white;
+                selection-background-color: {fg_var};
+            }}
+        """)
+        self.color_combo.currentTextChanged.connect(self.on_combo_changed)
+        layout.addWidget(self.color_combo)
+
+        # Custom hex input (initially hidden)
+        self.hex_input = QLineEdit()
+        self.hex_input.setPlaceholderText("Enter hex color (e.g., #FF5733)")
+        self.hex_input.setMaxLength(7)
+        self.hex_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 16px;
+            }}
+        """)
+        self.hex_input.hide()
+        self.hex_input.textChanged.connect(self.validate_hex_input)
+        layout.addWidget(self.hex_input)
+
+        # Apply custom color button
+        self.apply_btn = QPushButton("Apply Custom Color")
+        self.apply_btn.setFixedHeight(35)
+        self.apply_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var};
+                color: #212121;
+                font-size: 16 px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 10px;
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var};
+            }}
+        """)
+        self.apply_btn.hide()
+        self.apply_btn.clicked.connect(self.apply_custom_color)
+        layout.addWidget(self.apply_btn)
+
+    def on_combo_changed(self, color_name):
+        """Handle color selection change"""
+        if color_name == "Custom":
+            self.hex_input.show()
+            self.apply_btn.show()
+        else:
+            self.hex_input.hide()
+            self.apply_btn.hide()
+
+            # Apply preset colors
+            color_map = {
+                "White": "#FFFFFF",
+                "Green": "#4F925F",
+                "Red": "#BD6565",
+                "Blue": "#4A90E2",
+                "Yellow": "#F4D03F",
+                "Cyan": "#5DADE2",
+                "Magenta": "#AF7AC5"
+            }
+            
+            if color_name in color_map:
+                self.set_color(color_map[color_name])
+    
+    def validate_hex_input(self, text):
+        """Validate hex input as user types"""
+        # Auto-add '#' if not present
+        if text and not text.startswith('#'):
+            self.hex_input.setText('#' + text)
+            return
+
+        # Check if valid hex (allow partial input)
+        if len(text) > 1:
+            try:
+                int(text[1:], 16)
+                self.hex_input.setStyleSheet(f"""
+                    QLineEdit {{
+                        background-color: #2a2a2a;
+                        color: white;
+                        border: 2px solid {fg_var};
+                        border-radius: 5px;
+                        padding: 8px;
+                        font-size: 16px;
+                    }}
+                """)
+            except ValueError:
+                self.hex_input.setStyleSheet(f"""
+                    QLineEdit {{
+                        background-color: #2a2a2a;
+                        color: white;
+                        border: 2px solid {dark_fg_var};
+                        border-radius: 5px;
+                        padding: 8px;
+                        font-size: 16px;
+                    }}
+                """)
+
+    def apply_custom_color(self):
+        """Apply custom hex color"""
+        hex_color = self.hex_input.text()
+
+        # Validate full hex code
+        if len(hex_color) == 7 and hex_color.startswith('#'):
+            try:
+                int(hex_color[1:], 16)
+                self.set_color(hex_color)
+            except ValueError:
+                pass
+
+    def set_color(self, color):
+        """Set the color and call the callback"""
+        self.current_color = color
+        if self.on_color_change:
+            self.on_color_change(color)
+    
+    def get_color(self):
+        """Get the current color"""
+        return self.current_color
 
 class QuestionDialog(QDialog):
     """
@@ -251,6 +498,7 @@ class QuestionDialog(QDialog):
         self.answer_input = QLineEdit()
         self.answer_input.setFont(QFont(font_name, 24))
         self.answer_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.answer_input.setFixedHeight(70)
         self.answer_input.setStyleSheet(f"""
             QLineEdit {{
                 background-color: #2a2a2a;
@@ -579,12 +827,13 @@ class SetCancelButtons(QWidget):
     Set is used to set and alarm.
     Cancel is used to cancel setting the alarm.
     """
-    def __init__(self, layout_to_add_to, up_down_buttons, digital_clock, alarm_panel):
+    def __init__(self, layout_to_add_to, up_down_buttons, digital_clock, alarm_panel, main_window):
         super().__init__()
         self.layout = layout_to_add_to
         self.up_down_buttons = up_down_buttons
         self.digital_clock = digital_clock
         self.alarm_panel = alarm_panel
+        self.main_window = main_window
         self.buttons_hidden = True # Initially sets that buttons are hidden
         self.alarms = []
         self.create_buttons()
@@ -598,7 +847,7 @@ class SetCancelButtons(QWidget):
         """
         # Creates a horizontal layout for the buttons
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(0)
+        button_layout.setSpacing(10)
 
         self.setBtn = QPushButton(text="+", parent=self)
         self.setBtn.setFixedSize(100,60)
@@ -644,14 +893,24 @@ class SetCancelButtons(QWidget):
         if self.buttons_hidden:
             # Entering alarm set mode
             self.cancelBtn.setEnabled(True)  # Enable clicking
+            # Get the stored color from MainWindow
+            if hasattr(self.main_window, 'cancel_button_color'):
+                cancel_color = self.main_window.cancel_button_color
+            else:
+                cancel_color = dark_fg_var # Fallback to default
+            
+            # Calculate hover color
+            hover_color = self.lighten_color(cancel_color, 1.2)
+
             self.cancelBtn.setStyleSheet(f"""
                 QPushButton {{
-                    background-color: {dark_fg_var}; 
+                    background-color: {cancel_color}; 
                     color: #212121; 
                     font-size: 24px;
                 }}
                 QPushButton:hover {{
-                    background-color: {dark_hover_var};
+                    background-color: {hover_color};
+                    filter: brightness(1.2);
                 }}
             """)
             self.up_down_buttons.show_buttons()
@@ -732,6 +991,24 @@ class SetCancelButtons(QWidget):
         result = dialog.exec() == QDialog.DialogCode.Accepted
         callback(result)
 
+    def lighten_color(self, hex_color, factor=1.2):
+        """Lighten a hex color by a factor"""
+        # Remove the '#' if present
+        hex_color = hex_color.lstrip('#')
+    
+        # Convert to RGB
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+    
+        # Lighten
+        r = min(255, int(r * factor))
+        g = min(255, int(g * factor))
+        b = min(255, int(b * factor))
+    
+        # Convert back to hex
+        return f"#{r:02x}{g:02x}{b:02x}"
+
 class MainWindow(QWidget):
     """
     Initilizes the Main Window and calls all the individual widgets to be ran
@@ -799,7 +1076,9 @@ class MainWindow(QWidget):
         self.main_layout.addSpacing(20)
 
         self.SetCancelButtons = SetCancelButtons(self.main_layout, self.UpDownButtons, 
-                                                 self.DigitalClock, self.alarm_panel)
+                                                 self.DigitalClock, self.alarm_panel, self)
+    
+        self.cancel_button_color = dark_fg_var  # Store default color
     
     def open_settings(self):
         """Show the settings panel"""
