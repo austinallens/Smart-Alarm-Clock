@@ -3,28 +3,12 @@ import random
 
 class MathQuestionGenerator:
     """
-    Generates simple random math questions (easy level)
-    and checks user's answer.
+    Generates simple random math questions with multiple difficulty levels
     """
 
-    def __init__(self):
+    def __init__(self, difficulty="Easy"):
+        self.difficulty = difficulty
         self.operations = ['+', '-', '*', '/']
-
-    def generate_question(self):
-        """Generate a random easy math question and answer."""
-        op = random.choice(self.operations)
-
-        # Random numbers for easy math
-        a = random.randint(0, 10)
-        b = random.randint(1, 10) if op == '/' else random.randint(0, 10)
-
-        # Make division exact to avoid fractions
-        if op == '/':
-            a = a * b  # ensures a is divisible by b
-
-        question = f"{a} {op} {b}"
-        answer = self.calculate_answer(a, b, op)
-        return question, answer
 
     @staticmethod
     def calculate_answer(a, b, op):
@@ -41,25 +25,36 @@ class MathQuestionGenerator:
 
     def ask_question(self):
         """Ask the user the math question and check the answer."""
-        question, correct_answer = self.generate_question()
+        question, correct_answer, options = self.generate_question()
         print("Solve this to turn off the alarm!")
         print("Question:", question)
+        
+        # Display multiple choice options
+        print("\nChoose an answer:")
+        for i, option in enumerate(options, 1):
+            print(f"{i}. {option}")
 
-        user_answer = input("Your answer: ")
+        user_answer = input("Your answer (1-4): ")
         try:
-            if int(user_answer) == correct_answer:
-                print("Correct! Alarm off.")
-                return True
+            choice_index = int(user_answer) - 1
+            if 0 <= choice_index < 4:
+                selected = options[choice_index]
+                if abs(selected - correct_answer) < 0.001:
+                    print("Correct! Alarm off.")
+                    return True
+                else:
+                    print(f"Wrong! The correct answer was {correct_answer}. Try again.")
+                    return False
             else:
-                print(f"Wrong! The correct answer was {correct_answer}. Try again.")
+                print("Please choose 1, 2, 3, or 4.")
                 return False
         except ValueError:
-            print("Please enter a number.")
+            print("Please enter a number between 1 and 4.")
             return False
 
 # Example usage
 if __name__ == "__main__":
-    generator = MathQuestionGenerator()
+    generator = MathQuestionGenerator(difficulty="Medium")
     # Keep asking until the user gets it correct
     while not generator.ask_question():
         pass

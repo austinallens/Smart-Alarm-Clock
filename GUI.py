@@ -1,5 +1,4 @@
 """
-Name: Austin
 This is the improved version of the GUI using
 PyQt6. (requires install)
 """
@@ -7,11 +6,11 @@ PyQt6. (requires install)
 import sys
 from PyQt6.QtWidgets import (QComboBox, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QFrame, QScrollArea, QDialog,
-                             QLineEdit, QMenu, QApplication)
+                             QLineEdit, QSlider, QApplication, QButtonGroup, QRadioButton)
 from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
 import alarm # Imports the alarm module
-import math_questions as mq # Imports math_questions module (as mq)
+import math_quiz as mq # Imports math_quiz module (as mq)
 
 # --- Values ---
 # Font Constants for ease-of-change
@@ -27,7 +26,7 @@ bg = "#212121"
 # --- Classes ---
 class AlarmSignals(QObject):
     """Signal handler for thread-safe alarm triggering"""
-    alarm_triggered = pyqtSignal(object, object)  # question_gen, callback
+    alarm_triggered = pyqtSignal(object, object, str, str)  # question_gen, callback
 
 class AlarmPanel(QWidget):
     """
@@ -52,7 +51,31 @@ class AlarmPanel(QWidget):
         # Scroll area for alarms
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;")
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: #1a1a1a;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #4F925F;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #6BC582
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;                 
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
+                background: none;                 
+            }
+        """)
 
         # Container for alarm widgets
         self.alarm_container = QWidget()
@@ -154,6 +177,8 @@ class SettingsPanel(QWidget):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.difficulty = "Easy" # Default difficulty
+        self.answer_mode = "Multiple Choice" # Default answer mode
         self.initUI()
         self.hide() # Initially hidden
 
@@ -201,16 +226,245 @@ class SettingsPanel(QWidget):
         layout.addLayout(header)
         layout.addSpacing(20)
 
-        # Add settings options here
+        # === Settings Options ===
         # Scroll area for settings
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("border: none;")
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: #1a1a1a;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #4F925F;
+                border-radius: 5px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #6BC582
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;                 
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical{
+                background: none;                 
+            }
+        """)
 
         settings_container = QWidget()
         settings_layout = QVBoxLayout()
         settings_layout.setSpacing(20)
         settings_container.setLayout(settings_layout)
+
+        # --- Question Settings Section ---
+        question_section = QLabel("Question Settings")
+        question_section.setFont(QFont(font_name, 18, QFont.Weight.Bold))
+        question_section.setStyleSheet("color: white; padding-bottom: 10px;")
+        settings_layout.addWidget(question_section)
+
+        # Difficulty Setting
+        difficulty_label = QLabel("Difficulty Level")
+        difficulty_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        difficulty_label.setStyleSheet("color: white;")
+        settings_layout.addWidget(difficulty_label)
+
+        self.difficulty_combo = QComboBox()
+        self.difficulty_combo.addItems(["Easy", "Medium"])
+        self.difficulty_combo.setCurrentText(self.difficulty)
+        self.difficulty_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 14px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white;
+                margin-right: 10px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #2a2a2a;
+                color: white;
+                selection-background-color: {fg_var};
+            }}
+        """)
+        self.difficulty_combo.currentTextChanged.connect(self.on_difficulty_changed)
+        settings_layout.addWidget(self.difficulty_combo)
+
+        settings_layout.addSpacing(10)
+
+        # Answer Mode Setting
+        answer_mode_label = QLabel("Answer Mode")
+        answer_mode_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        answer_mode_label.setStyleSheet("color: white;")
+        settings_layout.addWidget(answer_mode_label)
+
+        # Radio buttons for answer mode
+        self.answer_mode_group = QButtonGroup()
+
+        self.mc_radio = QRadioButton("Multiple Choice")
+        self.mc_radio.setChecked(True)
+        self.mc_radio.setStyleSheet(f"""
+            QRadioButton {{
+                color: white;
+                font-size: 14px;
+                padding: 5px;
+            }}
+            QRadioButton::indicator {{
+                width: 20px;
+                height: 20px;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {fg_var};
+                border: 2px solid {fg_var};
+                border-radius: 10px;
+            }}
+            QRadioButton::indicator:unchecked {{
+                background-color: #2a2a2a;
+                border: 2px solid #666;
+                border-radius: 10px;
+            }}
+        """)
+
+        self.type_radio = QRadioButton("Type Answer")
+        self.type_radio.setStyleSheet(f"""
+            QRadioButton {{
+                color: white;
+                font-size: 14px;
+                padding: 5px;
+            }}
+            QRadioButton::indicator {{
+                width: 20px;
+                height: 20px;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {fg_var};
+                border: 2px solid {fg_var};
+                border-radius: 10px;
+            }}
+            QRadioButton::indicator:unchecked {{
+                background-color: #2a2a2a;
+                border: 2px solid #666;
+                border-radius: 10px;
+            }}
+        """)
+
+        self.answer_mode_group.addButton(self.mc_radio)
+        self.answer_mode_group.addButton(self.type_radio)
+
+        self.mc_radio.toggled.connect(self.on_answer_mode_changed)
+
+        settings_layout.addWidget(self.mc_radio)
+        settings_layout.addWidget(self.type_radio)
+
+        settings_layout.addSpacing(20)
+
+        # --- Alarm Settings Section ---
+        alarm_section = QLabel("Alarm Settings")
+        alarm_section.setFont(QFont(font_name, 18, QFont.Weight.Bold))
+        alarm_section.setStyleSheet("color: white; padding-bottom: 10px;")
+        settings_layout.addWidget(alarm_section)
+
+        # Alarm Volume Seting
+        alarm_volume_label = QLabel("Alarm Volume")
+        alarm_volume_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        alarm_volume_label.setStyleSheet("color: white;")
+        settings_layout.addWidget(alarm_volume_label)
+
+        # Volume Slider
+        self.volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.volume_slider.setMinimum(0)
+        self.volume_slider.setMaximum(100)
+        self.volume_slider.setValue(50)
+        self.volume_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                background: #2a2a2a;
+                height: 8px;
+                border-radius: 4px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {fg_var};
+                width: 18px;
+                height: 18px;
+                margin: -5px 0;
+                border-radius: 9px;
+            }}
+            QSlider::handle:horizontal:hover {{
+                background: {hover_var};
+            }}
+            QSlider::sub-page:horizontal {{
+                background: {fg_var};
+                border-radius: 4px;
+            }}
+        """)
+        settings_layout.addWidget(self.volume_slider)
+
+        # Volume percentage label
+        self.volume_label = QLabel("50%")
+        self.volume_label.setFont(QFont(font_name, 14))
+        self.volume_label.setStyleSheet("color: #888888;")
+        self.volume_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.volume_slider.valueChanged.connect(lambda v: self.volume_label.setText(f"{v}%"))
+        settings_layout.addWidget(self.volume_label)
+
+        settings_layout.addSpacing(10)
+
+        # Snooze Duration Setting
+        snooze_label = QLabel("Snooze Duration (minutes)")
+        snooze_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        snooze_label.setStyleSheet("color: white;")
+        settings_layout.addWidget(snooze_label)
+
+        self.snooze_combo = QComboBox()
+        self.snooze_combo.addItems(["5", "10", "15", "20", "30"])
+        self.snooze_combo.setCurrentText("10")
+        self.snooze_combo.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 8px;
+                font-size: 14px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid white;
+                margin-right: 10px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #2a2a2a;
+                color: white;
+                selection-background-color: {fg_var};
+            }}
+        """)
+        settings_layout.addWidget(self.snooze_combo)
+
+        settings_layout.addSpacing(20)
+
+        # --- Color Settings Section ---
+        color_section = QLabel("Color Settings")
+        color_section.setFont(QFont(font_name, 18, QFont.Weight.Bold))
+        color_section.setStyleSheet("color: white; padding-bottom: 10px;")
+        settings_layout.addWidget(color_section)
 
         # Add more color pickers here as needed
         # Example for future:
@@ -241,6 +495,27 @@ class SettingsPanel(QWidget):
         settings_layout.addStretch()
         scroll.setWidget(settings_container)
         layout.addWidget(scroll)
+
+    def on_difficulty_changed(self, difficulty):
+        """Handle difficulty change"""
+        self.difficulty = difficulty
+        print(f"Difficulty changed to: {difficulty}")
+
+    def on_answer_mode_changed(self):
+        """Handle answer mode change"""
+        if self.mc_radio.isChecked():
+            self.answer_mode = "Multiple Choice"
+        else:
+            self.answer_mode = "Type Answer"
+        print(f"Answer mode changed to: {self.answer_mode}")
+    
+    def get_difficulty(self):
+        """Get current difficulty setting"""
+        return self.difficulty
+    
+    def get_answer_mode(self):
+        """Get current answer mode setting"""
+        return self.answer_mode
 
     def lighten_color(self, hex_color, factor=1.2):
         """Lighten a hex color by a factor"""
@@ -460,41 +735,100 @@ class QuestionDialog(QDialog):
     """
     Dialog that displays a question and requires correct answer to dismiss
     """
-    def __init__(self, parent=None, question_generator=None):
+    def __init__(self, parent=None, question_generator=None, difficulty="Easy", answer_mode="Multiple Choice"):
         super().__init__(parent)
         self.question_generator = question_generator or mq.MathQuestionGenerator()
+        self.question_generator.set_difficulty(difficulty)
+        self.answer_mode = answer_mode
         self.correct_answer = None
+        self.options = None
         self.initUI()
         self.generate_new_question()
 
     def initUI(self):
         self.setWindowTitle("Alarm - Solve to Dismiss")
         self.setModal(True)
-        self.setFixedSize(400, 250)
+        self.setMinimumSize(400, 300)
         self.setStyleSheet(f"background-color: {bg};")
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+        self.main_layout = QVBoxLayout()
+        self.setLayout(self.main_layout)
 
         # Title
         title = QLabel("Solve this to turn off the Alarm!")
         title.setFont(QFont(font_name, 16, QFont.Weight.Bold))
         title.setStyleSheet("color: white;")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title)
+        self.main_layout.addWidget(title)
 
-        layout.addSpacing(20)
+        self.main_layout.addSpacing(20)
 
         # Question Display
         self.question_label = QLabel()
         self.question_label.setFont(QFont(font_name, 32))
         self.question_label.setStyleSheet("color: white;")
         self.question_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.question_label)
+        self.main_layout.addWidget(self.question_label)
 
-        layout.addSpacing(20)
+        self.main_layout.addSpacing(20)
 
-        # Answer input
+        self.answer_container = QWidget()
+        self.answer_layout = QVBoxLayout()
+        self.answer_container.setLayout(self.answer_layout)
+        self.main_layout.addWidget(self.answer_container)
+
+        # Feedback label
+        self.feedback_label = QLabel()
+        self.feedback_label.setFont(QFont(font_name, 14))
+        self.feedback_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.main_layout.addWidget(self.feedback_label)
+
+        self.main_layout.addSpacing(10)
+
+    def generate_new_question(self):
+        """Generate a new question using the question generator"""
+        question, answer, options = self.question_generator.generate_question()
+        self.question_label.setText(question)
+        self.correct_answer = answer
+        self.options = options
+        self.feedback_label.clear()
+
+        # Clear previous answer widgets
+        while self.answer_layout.count():
+            item = self.answer_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Build UI based on answer mode
+        if self.answer_mode == "Multiple Choice":
+            self.build_multiple_choice_ui()
+        else:
+            self.build_type_answer_ui()
+    
+    def build_multiple_choice_ui(self):
+        """Build the multiple choice button interface"""
+        for i, option in enumerate(self.options):
+            btn = QPushButton(str(option))
+            btn.setFixedHeight(50)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: #2a2a2a;
+                    color: white;
+                    font-size: 18px;
+                    border: 2px solid {fg_var};
+                    border-radius: 5px;
+                    padding: 10px;
+                }}
+                QPushButton:hover {{
+                    background-color: {fg_var};
+                    color: #212121;
+                }}
+            """)
+            btn.clicked.connect(lambda checked, opt=option: self.check_multiple_choice_answer(opt))
+            self.answer_layout.addWidget(btn)
+
+    def build_type_answer_ui(self):
+        """Build the type answer input interface"""
         self.answer_input = QLineEdit()
         self.answer_input.setFont(QFont(font_name, 24))
         self.answer_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -508,18 +842,10 @@ class QuestionDialog(QDialog):
                 padding: 10px
             }}
         """)
-        self.answer_input.returnPressed.connect(self.check_answer)
-        layout.addWidget(self.answer_input)
+        self.answer_input.returnPressed.connect(self.check_typed_answer)
+        self.main_layout.addWidget(self.answer_input)
 
-        layout.addSpacing(10)
-
-        # Feedback label
-        self.feedback_label = QLabel()
-        self.feedback_label.setFont(QFont(font_name, 14))
-        self.feedback_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(self.feedback_label)
-
-        layout.addSpacing(10)
+        self.main_layout.addSpacing(10)
 
         # Submit button
         submit_btn = QPushButton("Submit")
@@ -536,38 +862,39 @@ class QuestionDialog(QDialog):
                 background-color: {hover_var}
             }}
         """)
-        submit_btn.clicked.connect(self.check_answer)
-        layout.addWidget(submit_btn)
+        submit_btn.clicked.connect(self.check_typed_answer)
+        self.main_layout.addWidget(submit_btn)
 
-    def generate_new_question(self):
-        """Generate a new question using the question generator"""
-        question, answer = self.question_generator.generate_question()
-        self.question_label.setText(question)
-        self.correct_answer = answer
-        self.answer_input.clear()
-        self.feedback_label.clear()
+        # Focus the input
+        self.answer_input.setFocus()
     
-    def check_answer(self):
-        """Check if the user's answer is correct"""
-        user_answer = int(self.answer_input.text())
-        
-        # Try to convert to int if the correct answer is an int
-        if isinstance(self.correct_answer, int):
-            try:
-                user_answer = int(user_answer)
-            except ValueError:
-                self.feedback_label.setStyleSheet("color: #BD6565;")
-                self.feedback_label.setText("Please enter a number.")
-                return
-
-        if user_answer == self.correct_answer:
-            self.feedback_label.setStyleSheet("color: #6BC582;")
-            self.feedback_label.setText("✓ Correct! Alarm dismissed.")
-            QTimer.singleShot(500, self.accept)  # Close after 0.5s
+    def check_multiple_choice_answer(self, selected_option):
+        """Check if the selected multiple choice answer is correct"""
+        if selected_option == self.correct_answer:
+            self.feedback_label.setStyleSheet("color: #6BC582")
+            self.feedback_label.setText("Correct! Alarm dismissed.")
+            QTimer.singleShot(500, self.accept)
         else:
             self.feedback_label.setStyleSheet("color: #BD6565;")
-            self.feedback_label.setText(f"✗ Wrong! Try again.")
+            self.feedback_label.setText("Wrong! Try again.")
 
+    def check_typed_answer(self):
+        """Check if the user's answer is correct"""
+        try:
+            user_answer = int(self.answer_input.text())
+        
+            if user_answer == self.correct_answer:
+                self.feedback_label.setStyleSheet("color: #6BC582;")
+                self.feedback_label.setText("Correct! Alarm dismissed.")
+                QTimer.singleShot(500, self.accept)
+            else:
+                self.feedback_label.setStyleSheet("color: #BD6565;")
+                self.feedback_label.setText("Wrong! Try again.")
+                self.answer_input.clear()
+        except ValueError:
+            self.feedback_label.setStyleSheet("color: #BD6565;")
+            self.feedback_label.setText("Please enter a valid number.")
+            self.answer_input.clear()
 
     def closeEvent(self, event):
         """Prevent closing without correct answer"""
@@ -918,13 +1245,20 @@ class SetCancelButtons(QWidget):
             self.buttons_hidden = False
         else:
             # Confirming alarm
+            if hasattr(self.main_window, 'settings_panel'):
+                difficulty = self.main_window.settings_panel.get_difficulty()
+                answer_mode = self.main_window.settings_panel.get_answer_mode()
+            else:
+                difficulty = "Easy"
+                answer_mode = "Multiple Choice"
+
             alarm_time_24hr = self.digital_clock.get_alarm_time_string()
             alarm_time_display = self.digital_clock.get_alarm_display_string()
             self.alarms.append(alarm_time_24hr)
-            print(f"Alarm set for: {alarm_time_24hr}") # Debug print
+            print(f"Alarm set for: {alarm_time_24hr} with {difficulty} difficulty and {answer_mode} mode") # Debug print
 
             # Create question generator (can be customized later)
-            question_gen = mq.MathQuestionGenerator()
+            question_gen = mq.MathQuestionGenerator(difficulty=difficulty)
 
             # Store alarm time for removal after completion
             alarm_time_to_remove = alarm_time_24hr
@@ -941,7 +1275,7 @@ class SetCancelButtons(QWidget):
                     result_event.set()
 
                 # Emit signal to main thread
-                self.alarm_signals.alarm_triggered.emit(question_gen, callback)
+                self.alarm_signals.alarm_triggered.emit(question_gen, callback, difficulty, answer_mode)
 
                 # Wait for result
                 result_event.wait()
@@ -985,9 +1319,9 @@ class SetCancelButtons(QWidget):
         self.digital_clock.exit_alarm_mode()
         self.buttons_hidden = True
 
-    def show_question_dialog(self, question_gen, callback):
-        """Show question dialog in main thread"""
-        dialog = QuestionDialog(None, question_gen)
+    def show_question_dialog(self, question_gen, callback, difficulty, answer_mode):
+        """Show question dialog in main thread with specified difficulty and answer mode"""
+        dialog = QuestionDialog(None, question_gen, difficulty, answer_mode)
         result = dialog.exec() == QDialog.DialogCode.Accepted
         callback(result)
 
