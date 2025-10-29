@@ -1,6 +1,8 @@
 """
 Smart Alarm - Main Entry Point
 Run this file to start the application
+Requires 'pip install PyQt6'
+Requires 'pip install pygame' (for beeps)
 """
 import sys
 from PyQt6.QtWidgets import QApplication

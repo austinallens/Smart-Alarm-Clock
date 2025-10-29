@@ -6,9 +6,11 @@ PyQt6. (requires install)
 import sys
 from PyQt6.QtWidgets import (QComboBox, QWidget, QVBoxLayout, QHBoxLayout, 
                              QPushButton, QLabel, QFrame, QScrollArea, QDialog,
-                             QLineEdit, QSlider, QApplication, QButtonGroup, QRadioButton)
+                             QLineEdit, QSlider, QApplication, QButtonGroup, QRadioButton,
+                             QFileDialog)
 from PyQt6.QtCore import Qt, QTimer, QTime, pyqtSignal, QObject
 from PyQt6.QtGui import QFont
+from pathlib import Path
 import alarm # Imports the alarm module
 import math_quiz as mq # Imports math_quiz module (as mq)
 
@@ -179,6 +181,8 @@ class SettingsPanel(QWidget):
         super().__init__(parent)
         self.difficulty = "Easy" # Default difficulty
         self.answer_mode = "Multiple Choice" # Default answer mode
+        self.alarm_volume = 50
+        self.custom_sound_file = None
         self.initUI()
         self.hide() # Initially hidden
 
@@ -458,6 +462,75 @@ class SettingsPanel(QWidget):
         """)
         settings_layout.addWidget(self.snooze_combo)
 
+        settings_layout.addSpacing(10)
+
+        custom_sound_label = QLabel("Custom Alarm Sound")
+        custom_sound_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
+        custom_sound_label.setStyleSheet("color: white;")
+        settings_layout.addWidget(custom_sound_label)
+
+        # Sound file display and buttons
+        sound_control_layout = QHBoxLayout()
+
+        self.sound_file_label = QLabel("Default Beep")
+        self.sound_file_label.setFont(QFont(font_name, 12))
+        self.sound_file_label.setStyleSheet(f"""
+            QLabel {{
+                color: #888888;
+                background-color: #2a2a2a;
+                border: 2px solid #666;
+                border-radius: 5px;
+                padding: 8px;
+            }}
+        """)
+        sound_control_layout.addWidget(self.sound_file_label, stretch=3)
+
+        # Browser Button
+        browse_btn = QPushButton("Browse")
+        browse_btn.setFixedWidth(80)
+        browse_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var};
+                color: #212121;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 8px
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var}
+            }}
+        """)
+        browse_btn.clicked.connect(self.browse_sound_file)
+        sound_control_layout.addWidget(browse_btn)
+
+        # Clear Button
+        clear_btn = QPushButton("Clear")
+        clear_btn.setFixedWidth(80)
+        clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {dark_fg_var};
+                color: white;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 8px;
+            }}
+            QPushButton:hover {{
+                background-color: {dark_hover_var};
+            }}
+        """)
+        clear_btn.clicked.connect(self.clear_sound_file)
+        sound_control_layout.addWidget(clear_btn)
+
+        settings_layout.addLayout(sound_control_layout)
+
+        # Info Label
+        sound_info = QLabel("Supported: MP3, WAV, OGG")
+        sound_info.setFont(QFont(font_name, 10))
+        sound_info.setStyleSheet("color: #666666;")
+        settings_layout.addWidget(sound_info)
+
         settings_layout.addSpacing(20)
 
         # --- Color Settings Section ---
@@ -562,6 +635,54 @@ class SettingsPanel(QWidget):
                             filter: brightness(1.2);
                         }}
                     """)
+
+    def get_volume(self):
+        """Get current volume setting"""
+        return self.volume_slider.value()
+    
+    def get_sound_file(self):
+        """Get current custom sound file path"""
+        return self.custom_sound_file
+    
+    def browse_sound_file(self):
+        """Open file dialog to select custom alarm sound"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Alarm Sound",
+            "",
+            "Audio Files (*.mp3 *.wav *.ogg);;All Files (*)"
+        )
+        
+        if file_path:
+            self.custom_sound_file = file_path
+            # Display just the filename
+            filename = Path(file_path).name
+            self.sound_file_label.setText(filename)
+            self.sound_file_label.setStyleSheet(f"""
+                QLabel {{
+                    color: white;
+                    background-color: #2a2a2a;
+                    border: 2px solid {fg_var};
+                    border-radius: 5px;
+                    padding: 8px;
+                }}
+            """)
+            print(f"Custom sound selected: {file_path}")
+
+    def clear_sound_file(self):
+        """Clear custom sound file and revert to default beep"""
+        self.custom_sound_file = None
+        self.sound_file_label.setText("Default Beep")
+        self.sound_file_label.setStyleSheet(f"""
+            QLabel {{
+                color: #888888;
+                background-color: #2a2a2a;
+                border: 2px solid #666;
+                border-radius: 5px;
+                padding: 8px;
+            }}
+        """)
+        print("Custom sound cleared, using default beep")
 
 class ColorPicker(QWidget):
     """
@@ -1286,8 +1407,17 @@ class SetCancelButtons(QWidget):
 
                 return result_container['success']
 
+            # Get volume and sound file from settings
+            if hasattr(self.main_window, 'settings_panel'):
+                volume = self.main_window.settings_panel.get_volume()
+                sound_file = self.main_window.settings_panel.get_sound_file()
+            else:
+                volume = 50
+                sound_file = None
+                
             # Add alarm to the panel and start it
-            alarm_thread = alarm.start_alarm(alarm_time_24hr, on_alarm_trigger=on_alarm)
+            alarm_thread = alarm.start_alarm(alarm_time_24hr, on_alarm_trigger=on_alarm,
+                                             volume=volume, sound_file=sound_file)
             self.alarm_panel.add_alarm(alarm_time_24hr, alarm_time_display, alarm_thread)
 
             # Exit alarm mode
