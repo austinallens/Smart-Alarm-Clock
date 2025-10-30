@@ -13,6 +13,7 @@ from PyQt6.QtGui import QFont
 from pathlib import Path
 import alarm # Imports the alarm module
 import math_quiz as mq # Imports math_quiz module (as mq)
+import random
 
 # --- Values ---
 # Font Constants for ease-of-change
@@ -24,6 +25,9 @@ hover_var="#6BC582"
 dark_fg_var="#924F4F"
 dark_hover_var="#BD6565"
 bg = "#212121"
+
+# Dictionary to store Flashcards
+Flashcards = {}
 
 # --- Classes ---
 class AlarmSignals(QObject):
@@ -366,13 +370,39 @@ class SettingsPanel(QWidget):
             }}
         """)
 
+        self.flash_radio = QRadioButton("Flash Card")
+        self.flash_radio.setStyleSheet(f"""
+            QRadioButton {{
+                color: white;
+                font-size: 14px;
+                padding: 5px;
+            }}
+            QRadioButton::indicator {{
+                width: 20px;
+                height: 20px;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {fg_var};
+                border: 2px solid {fg_var};
+                border-radius: 10px;
+            }}
+            QRadioButton::indicator:unchecked {{
+                background-color: #2a2a2a;
+                border: 2px solid #666;
+                border-radius: 10px;
+            }}
+        """)
+
         self.answer_mode_group.addButton(self.mc_radio)
         self.answer_mode_group.addButton(self.type_radio)
+        self.answer_mode_group.addButton(self.flash_radio)
+
 
         self.mc_radio.toggled.connect(self.on_answer_mode_changed)
 
         settings_layout.addWidget(self.mc_radio)
         settings_layout.addWidget(self.type_radio)
+        settings_layout.addWidget(self.flash_radio)
 
         settings_layout.addSpacing(20)
 
@@ -569,6 +599,55 @@ class SettingsPanel(QWidget):
         scroll.setWidget(settings_container)
         layout.addWidget(scroll)
 
+        # --- Create Flashcard Section ---
+        flashcreate_section = QLabel("Create Flashcards")
+        flashcreate_section.setFont(QFont(font_name, 18, QFont.Weight.Bold))
+        flashcreate_section.setStyleSheet("color: white; padding-bottom: 10px;")
+        settings_layout.addWidget(flashcreate_section)
+
+
+        # First textbox
+        self.Question = QLineEdit()
+        self.Question.setPlaceholderText(f"Question ")
+        settings_layout.addWidget(self.Question)
+
+        # Second textbox
+        self.Answer = QLineEdit()
+        self.Answer.setPlaceholderText(f"Answer ")
+        settings_layout.addWidget(self.Answer)
+
+        def create_flashcard():
+            questioned = self.Question.text()
+            answered = self.Answer.text()
+            Flashcards[questioned]=answered
+
+            flashList = QPushButton(f"{questioned} : {answered}")
+            flashList.setFont(QFont(font_name, 10, QFont.Weight.Bold))
+            settings_layout.addWidget(flashList)
+
+            self.Question.clear()
+            self.Answer.clear()
+
+        # Submit Button
+        submit_button = QPushButton("Submit")
+        submit_button.setFixedWidth(80)
+        submit_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var};
+                color: #212121;
+                font-size: 14px;
+                font-weight: bold;
+                border-radius: 5px;
+                padding: 8px
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var}
+            }}
+        """)
+        submit_button.clicked.connect(create_flashcard)
+        settings_layout.addWidget(submit_button)
+
+
     def on_difficulty_changed(self, difficulty):
         """Handle difficulty change"""
         self.difficulty = difficulty
@@ -578,6 +657,8 @@ class SettingsPanel(QWidget):
         """Handle answer mode change"""
         if self.mc_radio.isChecked():
             self.answer_mode = "Multiple Choice"
+        elif self.flash_radio.isChecked():
+            self.answer_mode = "Flash Cards"
         else:
             self.answer_mode = "Type Answer"
         print(f"Answer mode changed to: {self.answer_mode}")
@@ -907,24 +988,38 @@ class QuestionDialog(QDialog):
         self.main_layout.addSpacing(10)
 
     def generate_new_question(self):
-        """Generate a new question using the question generator"""
-        question, answer, options = self.question_generator.generate_question()
-        self.question_label.setText(question)
-        self.correct_answer = answer
-        self.options = options
-        self.feedback_label.clear()
-
-        # Clear previous answer widgets
-        while self.answer_layout.count():
-            item = self.answer_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        
-        # Build UI based on answer mode
-        if self.answer_mode == "Multiple Choice":
-            self.build_multiple_choice_ui()
-        else:
-            self.build_type_answer_ui()
+        if self.answer_mode == "Flash Cards":
+            question = random.choice(list(Flashcards.keys())) 
+            self.question_label.setText(question)
+            answer = Flashcards[question]
+            self.correct_answer = answer
+            self.question = question
+            self.feedback_label.clear()
+            # Clear previous answer widgets
+            while self.answer_layout.count():
+                item = self.answer_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            
+            self.build_flash_cards_ui()
+            print("vuwbeiho")
+        else:    
+            """Generate a new question using the question generator"""
+            question, answer, options = self.question_generator.generate_question()
+            self.question_label.setText(question)
+            self.correct_answer = answer
+            self.options = options
+            self.feedback_label.clear()
+            # Clear previous answer widgets
+            while self.answer_layout.count():
+                item = self.answer_layout.takeAt(0)
+                if item.widget():
+                    item.widget().deleteLater()
+            # Build UI based on answer mode
+            if self.answer_mode == "Multiple Choice":
+                self.build_multiple_choice_ui()
+            else:
+                self.build_type_answer_ui()
     
     def build_multiple_choice_ui(self):
         """Build the multiple choice button interface"""
@@ -988,7 +1083,58 @@ class QuestionDialog(QDialog):
 
         # Focus the input
         self.answer_input.setFocus()
+
+    def build_flash_cards_ui(self):
+        """Build the type answer input interface"""
+        self.answer_input = QLineEdit()
+        self.answer_input.setFont(QFont(font_name, 24))
+        self.answer_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.answer_input.setFixedHeight(70)
+        self.answer_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: #2a2a2a;
+                color: white;
+                border: 2px solid {fg_var};
+                border-radius: 5px;
+                padding: 10px
+            }}
+        """)
+        self.answer_input.returnPressed.connect(self.check_flash_answer)
+        self.main_layout.addWidget(self.answer_input)
+
+        self.main_layout.addSpacing(10)
+
+        # Submit button
+        submit_btn = QPushButton("Submit")
+        submit_btn.setFixedHeight(50)
+        submit_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {fg_var};
+                color: #212121;
+                font-size: 18px;
+                font-weight: bold;
+                border-radius: 5px
+            }}
+            QPushButton:hover {{
+                background-color: {hover_var}
+            }}
+        """)
+        submit_btn.clicked.connect(self.check_flash_answer)
+        self.main_layout.addWidget(submit_btn)
+
+        # Focus the input
+        self.answer_input.setFocus()
     
+    def check_flash_answer(self):
+        user_answer = self.answer_input.text()
+        if user_answer == self.correct_answer:
+            self.feedback_label.setStyleSheet("color: #6BC582;")
+            self.feedback_label.setText("Correct! Alarm dismissed.")
+            QTimer.singleShot(500, self.accept)
+        else:
+            self.feedback_label.setStyleSheet("color: #BD6565;")
+            self.feedback_label.setText("Wrong! Try again.")
+            self.answer_input.clear()        
     def check_multiple_choice_answer(self, selected_option):
         """Check if the selected multiple choice answer is correct"""
         if selected_option == self.correct_answer:
@@ -1561,6 +1707,10 @@ class MainWindow(QWidget):
 
 # Runs only if the main file is run
 if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()
