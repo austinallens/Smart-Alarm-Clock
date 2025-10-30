@@ -456,44 +456,6 @@ class SettingsPanel(QWidget):
 
         settings_layout.addSpacing(10)
 
-        # Snooze Duration Setting
-        snooze_label = QLabel("Snooze Duration (minutes)")
-        snooze_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
-        snooze_label.setStyleSheet("color: white;")
-        settings_layout.addWidget(snooze_label)
-
-        self.snooze_combo = QComboBox()
-        self.snooze_combo.addItems(["5", "10", "15", "20", "30"])
-        self.snooze_combo.setCurrentText("10")
-        self.snooze_combo.setStyleSheet(f"""
-            QComboBox {{
-                background-color: #2a2a2a;
-                color: white;
-                border: 2px solid {fg_var};
-                border-radius: 5px;
-                padding: 8px;
-                font-size: 14px;
-            }}
-            QComboBox::drop-down {{
-                border: none;
-            }}
-            QComboBox::down-arrow {{
-                image: none;
-                border-left: 5px solid transparent;
-                border-right: 5px solid transparent;
-                border-top: 5px solid white;
-                margin-right: 10px;
-            }}
-            QComboBox QAbstractItemView {{
-                background-color: #2a2a2a;
-                color: white;
-                selection-background-color: {fg_var};
-            }}
-        """)
-        settings_layout.addWidget(self.snooze_combo)
-
-        settings_layout.addSpacing(10)
-
         custom_sound_label = QLabel("Custom Alarm Sound")
         custom_sound_label.setFont(QFont(font_name, 16, QFont.Weight.Bold))
         custom_sound_label.setStyleSheet("color: white;")
